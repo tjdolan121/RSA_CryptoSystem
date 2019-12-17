@@ -1,5 +1,8 @@
-# Math functions used in RSA Encryption.
+# Math functions used in RSA Encryption utilizing a block cipher.
 
+# TODO: Minimum working code for block implementation.  Needs to be refactored for clarity.
+# TODO: Make newly created functions single-purpose (break out functionality into individual functions).
+# TODO: Add comments.
 
 import random
 
@@ -8,34 +11,110 @@ import random
 # ===============================================PREP THE MESSAGE FUNCTIONS============================================|
 # =====================================================================================================================|
 
-def convert_text(_string):
+def block_convert_text(_string):
     """
-    Converts a string to ASCII code for use in RSA.
+    Converts a string of letters to a numerical format.  Groups letters
+    into blocks to avoid frequency analysis exploit.
 
     Args:
-         _string (string): message to be encoded.
+        _string (string): message to be encoded using block conversion.
 
     Returns:
-        list: message separated by character and converted to ASCII code.
-
+        list: message blocked into chunks and converted to numbers.
     """
 
-    return [ord(char) for char in list(_string)]
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    _string = _string.upper()
+    conversion_table = {char: idx for idx, char in enumerate(alphabet)}
+    return [conversion_table[char] for char in _string]
 
 
-def convert_num(_list):
+def block_convert_num(_list):
     """
-    Converts a list of ASCII encoded characters to a string.
+    Converts a list of block encoded characters to a string.
 
     Args:
-         _list (list): ASCII list to be decoded to string.
+         _list (list): List of block encoded letters in the form of ints.
 
     Returns:
-        string: message obtained from converting ASCII code.
+        string: message obtained from converting block cipher text.
 
     """
 
-    return "".join(map(chr, _list))
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    conversion_table = {idx: char for idx, char in enumerate(alphabet)}
+    return "".join([conversion_table[num] for num in _list if num in conversion_table])
+
+
+def find_block_size(n):
+    """
+    Finds the optimal block size for block encryption using public key token n.
+
+    Example: if our n is 2748, 2525 < 2748 < 252525, so our
+    block size would be len(str(2525)) = 4.
+    If our n is 2327, 25 < 2327 < 2525, so our block size
+    would be len(str(25)) = 2.
+
+    Args:
+         n (int): Public encryption token n.
+
+    Returns:
+        int: Optimal block ("chunking") size for prepping the message.
+
+    """
+    adder = "25"
+    multiplier = len(str(n)) // 2
+    guess = adder * multiplier
+    if int(guess) < n:
+        return len(guess)
+    else:
+        return len(guess) - 2
+
+
+def separate_string_to_blocks(_string, length):
+    """
+    Helper function for preparing our plaintext message for encryption.
+    Chunks a string into length-sized blocks and pushes them to a list.
+
+    Args:
+         _string (string): String to be broken into length-sized blocks.
+         length (int): Size of individual blocks desired.
+
+    Returns:
+        list: Length sized chunks of the string pushed into a list.
+
+    """
+    return [_string[0 + i:length + i] for i in range(0, len(_string), length)]
+
+
+def prep_message(_string, n):
+    """
+    Takes a plain-text message and converts it into a list of numbers that
+    will be sent individually through an RSA encryption algorithm
+    (the "block" step in "block encryption").
+
+    Args:
+         _string (string): Plaintext message to be blocked.
+         n (int): Public key token n.  See below for usage.
+
+    Returns:
+        list: Blocked plaintext message to be passed on to encryption algorithm.
+
+    """
+    _string = _string.upper()
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    conversion_table = {char: str(idx) for idx, char in enumerate(alphabet)}
+    for char in conversion_table:
+        if len(conversion_table[char]) < 2:
+            conversion_table[char] = "0" + conversion_table[char]
+    encoded_message = ""
+    for char in _string:
+        encoded_message = encoded_message + conversion_table[char]
+    block_size = find_block_size(n)
+    message = separate_string_to_blocks(encoded_message, block_size)
+    while len(message[-1]) < len(message[-2]):
+        message[-1] = message[-1] + "00"
+    return message
 
 
 # =====================================================================================================================|
@@ -212,8 +291,23 @@ def encode(n, e, message):
     Returns:
         list: Encrypted message.
     """
+    prepped_message = prep_message(message, n)
+    print(prepped_message)
+    return [fme(int(block), e, n) for block in prepped_message]
 
-    return [fme(char, e, n) for char in convert_text(message)]  # Use fme and convert_text to encode
+
+def convert_prepped_to_plaintext(_list):
+    """
+    Breaks a plaintext blocked message up into the format needed for block_convert_num.
+
+    Arguments:
+        _list (list): Blocked message.
+
+    Returns:
+        list: List of individual integers to be processed back to alphabetic characters.
+    """
+    message_concat = "".join(_list)
+    return [int(char) for char in separate_string_to_blocks(message_concat, 2)]
 
 
 def decode(n, d, cipher_text):
@@ -223,8 +317,15 @@ def decode(n, d, cipher_text):
     Arguments:
         n (int): Public key token n.
         d (int): Private key token d.
-
+        cipher_text (list): List of block cipher blocks (ints)
     Returns:
         string: Decrypted message.
     """
-    return convert_num([fme(char, d, n) for char in cipher_text])  # Use fme and convert_num to decode
+    block_size = find_block_size(n)
+    unformatted_decrypted_message = [str(fme(char, d, n)) for char in cipher_text]
+    formatted_decrypted_message = []
+    for word in unformatted_decrypted_message:
+        leading_zeros_to_add = block_size - len(word)
+        word = ("0" * leading_zeros_to_add) + word
+        formatted_decrypted_message.append(word)
+    return block_convert_num(convert_prepped_to_plaintext(formatted_decrypted_message))
