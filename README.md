@@ -4,7 +4,7 @@
 
 #### CONTEXT: This was a project I had for an undergraduate CS class.
 
-#### OVERVIEW:
+#### OVERVIEW: 
 
 #### This app implements an RSA encryption protocol.  Two methods are shown:
 
